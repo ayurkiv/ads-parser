@@ -1,0 +1,335 @@
+<!--
+Zenserp Google Ads SERP Analyzer — Single‑page app for GitHub Pages
+Focus: Paid results in Google SERP (Top/Bottom Ads, Shopping). Uses Zenserp /api/v2/search.
+Note: Your API key is entered in the form and saved to localStorage.
+-->
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zenserp Google Ads SERP Analyzer</title>
+  <style>
+    :root { --bg:#0b1020; --panel:#121936; --muted:#97a0c0; --text:#e8ecff; --accent:#6ea8ff; }
+    html,body{height:100%}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;background:linear-gradient(180deg,#0b1020,#141b3a);color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:24px}
+    .card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px 18px 14px 18px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    h1{font-size:26px;margin:0 0 6px}
+    .muted{color:var(--muted);font-size:14px}
+    .grid{display:grid;gap:16px}
+    @media(min-width:900px){.grid{grid-template-columns:1.2fr 1fr}}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input,select,textarea{width:100%;background:#0f1733;color:var(--text);border:1px solid #2a376b;border-radius:10px;padding:10px 12px;outline:none;box-sizing:border-box}
+    textarea{min-height:122px;resize:vertical}
+    .inline{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+    .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer;flex:1 1 auto;text-align:center;white-space:nowrap}
+    .btn.primary{background:linear-gradient(180deg,#4e86ff,#3b6de0);color:#fff}
+    .btn.ghost{background:transparent;border:1px solid #2a376b;color:#cfe0ff}
+    .row{display:flex;flex-wrap:wrap;gap:10px}
+    .results{margin-top:18px}
+    details{background:#0f1733;border:1px solid #243366;border-radius:12px;padding:10px 12px}
+    details+details{margin-top:10px}
+    summary{font-weight:700;cursor:pointer}
+    .table{width:100%;border-collapse:collapse;margin-top:8px}
+    .table th,.table td{border-bottom:1px dashed #233162;padding:8px 6px;font-size:14px;text-align:left;vertical-align:top}
+    .pill{display:inline-block;border:1px solid #2a376b;border-radius:999px;padding:2px 8px;font-size:12px;color:#b9c7f4}
+    .footer{margin-top:20px;color:#93a2d7;font-size:12px}
+    .badge{font-size:11px;background:#1a244b;border:1px solid #2a376b;border-radius:8px;padding:2px 6px;margin-left:6px}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid #2a376b;border-top-color:#6ea8ff;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .kpi{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+    .kpi div{background:#0f1733;border:1px solid #243366;border-radius:12px;padding:8px 10px;font-size:12px}
+    a{color:#a7c5ff;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .danger{color:#ffb8c0}
+    .sectionTitle{margin-top:10px;font-weight:800}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Zenserp Google Ads SERP Analyzer</h1>
+      <div class="muted">Збір платних оголошень у Google SERP: верхні/нижні Ads та Shopping. Параметри запиту справа. Дані можна експортувати у CSV.</div>
+      <div class="grid" style="margin-top:14px">
+        <div>
+          <label>Ключові слова (по одному в рядку)</label>
+          <textarea id="keywords" placeholder="napkin holders
+купити холодильник
+brand + competitor" spellcheck="false"></textarea>
+          <div class="row" style="margin-top:12px">
+            <button class="btn primary" id="runBtn">Отримати Ads</button>
+            <button class="btn ghost" id="exportBtn" title="Експорт видимих результатів у CSV">Експорт CSV</button>
+            <span id="status" class="muted" style="flex:1 1 100%;margin-top:6px"></span>
+          </div>
+        </div>
+        <div>
+          <div class="inline">
+            <div>
+              <label>Країна (gl)</label>
+              <input id="gl" placeholder="us, au, ua, de ..." />
+            </div>
+            <div>
+              <label>Мова інтерфейсу (hl)</label>
+              <input id="hl" placeholder="en, uk, ru ..." />
+            </div>
+            <div>
+              <label>Розташування (location)</label>
+              <input id="location" placeholder="Sydney, Australia" />
+            </div>
+            <div>
+              <label>Пристрій</label>
+              <select id="device">
+                <option value="desktop" selected>desktop</option>
+                <option value="mobile">mobile</option>
+              </select>
+            </div>
+            <div>
+              <label>Результатів (num)</label>
+              <input id="num" type="number" min="1" max="100" value="10" />
+            </div>
+            <div>
+              <label>Сторінка (page)</label>
+              <input id="page" type="number" min="1" value="1" />
+            </div>
+            <div>
+              <label>Період (time_period)</label>
+              <select id="time_period">
+                <option value="">-- any --</option>
+                <option value="d">past day</option>
+                <option value="w">past week</option>
+                <option value="m">past month</option>
+                <option value="y">past year</option>
+              </select>
+            </div>
+            <div>
+              <label>Safe</label>
+              <select id="safe">
+                <option value="">default</option>
+                <option value="active">active</option>
+                <option value="off">off</option>
+              </select>
+            </div>
+            <div>
+              <label>API Key</label>
+              <input id="apikey" />
+            </div>
+          </div>
+          <div style="margin-top:6px" class="muted">
+            <span class="pill">search_engine = <b>google.com</b></span>
+            <span class="pill">endpoint = <code>/api/v2/search</code></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="results" class="results"></div>
+
+    <div class="footer">
+      <b>Пояснення полів Ads:</b> title, display_link, link, description, sitelinks, position. Для Shopping: title, price, merchant, link.
+    </div>
+  </div>
+
+<script>
+const $ = s => document.querySelector(s);
+const elResults = $('#results');
+const elStatus = $('#status');
+
+// Prefill API key from localStorage or default (optional demo)
+const savedKey = localStorage.getItem('zenserp_apikey_ads') || 'f7fb5890-99ed-11f0-928d-63001192fd80';
+$('#apikey').value = savedKey;
+
+function uiBusy(b){
+  if(b){ elStatus.innerHTML = 'Запит виконується <span class="spinner"></span>'; }
+  else { elStatus.textContent=''; }
+}
+
+function paramsFromUI(q){
+  const p = new URLSearchParams();
+  p.set('q', q);
+  p.set('search_engine','google.com');
+  const gl = $('#gl').value.trim(); if(gl) p.set('gl', gl);
+  const hl = $('#hl').value.trim(); if(hl) p.set('hl', hl);
+  const location = $('#location').value.trim(); if(location) p.set('location', location);
+  const device = $('#device').value; p.set('device', device);
+  const num = $('#num').value; if(num) p.set('num', num);
+  const page = $('#page').value; if(page) p.set('page', page);
+  const tp = $('#time_period').value; if(tp) p.set('time_period', tp);
+  const safe = $('#safe').value; if(safe) p.set('safe', safe);
+  return p;
+}
+
+async function fetchSerp(query){
+  const apikey = $('#apikey').value.trim();
+  if(!apikey){ throw new Error('Не вказано API Key'); }
+  localStorage.setItem('zenserp_apikey_ads', apikey);
+  const p = paramsFromUI(query);
+  p.set('apikey', apikey);
+  const url = 'https://app.zenserp.com/api/v2/search?' + p.toString();
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if(!res.ok){ const t = await res.text(); throw new Error('Помилка запиту: '+res.status+' '+t); }
+  return res.json();
+}
+
+function getAdsBuckets(data){
+  // Zenserp may return ads in various fields for Google
+  const top = data.top_ads || data.ads_top || [];
+  const bottom = data.bottom_ads || data.ads_bottom || [];
+  const shopping = data.shopping_results || data.shopping || [];
+  // Some payloads may also have a flat 'ads'. We'll distribute by position if available
+  if((data.ads||[]).length){
+    for(const ad of data.ads){
+      const pos = (ad.position||'').toString().toLowerCase();
+      if(pos.includes('top')) top.push(ad); else if(pos.includes('bottom')) bottom.push(ad); else top.push(ad);
+    }
+  }
+  return { top, bottom, shopping };
+}
+
+function normalizeAd(ad){
+  return {
+    title: ad.title || ad.heading || '',
+    link: ad.link || ad.url || ad.tracking_url || '',
+    display: ad.displayed_link || ad.display_link || ad.visible_link || '',
+    description: ad.snippet || ad.description || '',
+    sitelinks: ad.sitelinks || ad.site_links || [],
+    advertiser: ad.advertiser || ad.domain || '',
+  };
+}
+
+function renderAdsTable(keyword, label, items){
+  if(!items.length) return '';
+  let rows = items.map((raw, idx)=>{
+    const ad = normalizeAd(raw);
+    const sitelinks = Array.isArray(ad.sitelinks)
+      ? ad.sitelinks.map(s=> (typeof s === 'string'? s : (s.title||s.text||s.link||''))).filter(Boolean).join(' | ')
+      : '';
+    const domain = (ad.display||ad.link||'').replace(/^https?:\/\//,'').split('/')[0];
+    return `<tr>
+      <td>${idx+1}</td>
+      <td>${escapeHtml(ad.title)}</td>
+      <td><a href="${ad.link}" target="_blank">${escapeHtml(domain)}</a></td>
+      <td>${escapeHtml(ad.description)}</td>
+      <td>${escapeHtml(sitelinks)}</td>
+    </tr>`;
+  }).join('');
+  return `<h3 class="sectionTitle">${escapeHtml(label)} <span class="badge">${items.length}</span></h3>
+  <table class="table"><thead><tr>
+    <th>#</th><th>Title</th><th>Domain/URL</th><th>Description</th><th>Sitelinks</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderShoppingTable(keyword, items){
+  if(!items.length) return '';
+  let rows = items.map((p, idx)=>{
+    const title = p.title || '';
+    const price = p.price || p.price_raw || '';
+    const merchant = p.merchant || p.source || '';
+    const link = p.link || p.url || '';
+    return `<tr>
+      <td>${idx+1}</td>
+      <td>${escapeHtml(title)}</td>
+      <td>${escapeHtml(price)}</td>
+      <td>${escapeHtml(merchant)}</td>
+      <td><a href="${link}" target="_blank">${escapeHtml(link)}</a></td>
+    </tr>`;
+  }).join('');
+  return `<h3 class="sectionTitle">Shopping Ads <span class="badge">${items.length}</span></h3>
+  <table class="table"><thead><tr>
+    <th>#</th><th>Title</th><th>Price</th><th>Merchant</th><th>URL</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderKeywordBlock(keyword, data){
+  const { top, bottom, shopping } = getAdsBuckets(data);
+  const total = top.length + bottom.length + shopping.length;
+  const wrap = document.createElement('div');
+  const det = document.createElement('details');
+  det.open = true;
+  const sum = document.createElement('summary');
+  sum.innerHTML = `${escapeHtml(keyword)} <span class="badge">${total} paid</span>`;
+  det.appendChild(sum);
+
+  const kpi = document.createElement('div');
+  kpi.className='kpi';
+  kpi.innerHTML = `
+    <div>Top Ads: <b>${top.length}</b></div>
+    <div>Bottom Ads: <b>${bottom.length}</b></div>
+    <div>Shopping: <b>${shopping.length}</b></div>`;
+  det.appendChild(kpi);
+
+  det.insertAdjacentHTML('beforeend', renderAdsTable(keyword, 'Top Ads', top));
+  det.insertAdjacentHTML('beforeend', renderAdsTable(keyword, 'Bottom Ads', bottom));
+  det.insertAdjacentHTML('beforeend', renderShoppingTable(keyword, shopping));
+
+  wrap.appendChild(det);
+  elResults.appendChild(wrap);
+}
+
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+async function run(){
+  const raw = $('#keywords').value.trim();
+  if(!raw){ alert('Введи хоча б одне ключове слово'); return; }
+  elResults.innerHTML='';
+  const queries = raw.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  uiBusy(true);
+  for(const q of queries){
+    try{
+      const data = await fetchSerp(q);
+      renderKeywordBlock(q, data);
+    }catch(err){
+      const det=document.createElement('details');
+      det.open=true; det.innerHTML = `<summary>${escapeHtml(q)} <span class="badge danger">error</span></summary><div class="danger">${escapeHtml(err.message)}</div>`;
+      elResults.appendChild(det);
+    }
+  }
+  uiBusy(false);
+}
+
+function exportCSV(){
+  // Build CSV for ads + shopping tables currently shown
+  const blocks = Array.from(document.querySelectorAll('details'));
+  let rows = [['keyword','placement','rank','title','domain','url','description','sitelinks','price','merchant']];
+
+  blocks.forEach(det=>{
+    const keyword = det.querySelector('summary').childNodes[0].textContent.trim();
+
+    // Top/Bottom ads
+    det.querySelectorAll('h3.sectionTitle').forEach(h3=>{
+      const placement = h3.textContent.replace(/\s*\d+.*/,'').trim();
+      const table = h3.nextElementSibling;
+      if(!table || !table.matches('table')) return;
+      const isShopping = /Shopping Ads/i.test(placement);
+      table.querySelectorAll('tbody tr').forEach(tr=>{
+        const tds = tr.querySelectorAll('td');
+        if(isShopping){
+          rows.push([
+            keyword, placement, tds[0].textContent, tds[1].textContent, '', tds[4].textContent,
+            '', '', tds[2].textContent, tds[3].textContent
+          ]);
+        } else {
+          rows.push([
+            keyword, placement, tds[0].textContent, tds[1].textContent, tds[2].textContent, (tds[2].querySelector('a')||{}).href || tds[2].textContent,
+            tds[3].textContent, tds[4].textContent, '', ''
+          ]);
+        }
+      });
+    });
+  });
+
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'google_ads_serp.csv';
+  a.click();
+}
+
+$('#runBtn').addEventListener('click', run);
+$('#exportBtn').addEventListener('click', exportCSV);
+</script>
+</body>
+</html>
