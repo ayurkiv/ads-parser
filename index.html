@@ -1,14 +1,14 @@
 <!--
-Zenserp Google Ads SERP Analyzer — Single‑page app for GitHub Pages
-Focus: Paid results in Google SERP (Top/Bottom Ads, Shopping). Uses Zenserp /api/v2/search.
-Note: Your API key is entered in the form and saved to localStorage.
+SerpApi Google Ads SERP Analyzer — Single‑page app for GitHub Pages
+Focus: Paid results in Google SERP (Top/Bottom Ads + Shopping). Uses SerpApi /search (engine=google).
+API key is entered in the form and saved in localStorage (field prefilled with your key for convenience).
 -->
 <!doctype html>
 <html lang="uk">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Zenserp Google Ads SERP Analyzer</title>
+  <title>SerpApi Google Ads SERP Analyzer</title>
   <style>
     :root { --bg:#0b1020; --panel:#121936; --muted:#97a0c0; --text:#e8ecff; --accent:#6ea8ff; }
     html,body{height:100%}
@@ -49,8 +49,8 @@ Note: Your API key is entered in the form and saved to localStorage.
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Zenserp Google Ads SERP Analyzer</h1>
-      <div class="muted">Збір платних оголошень у Google SERP: верхні/нижні Ads та Shopping. Параметри запиту справа. Дані можна експортувати у CSV.</div>
+      <h1>SerpApi Google Ads SERP Analyzer</h1>
+      <div class="muted">Збір платних оголошень у Google SERP: Top/Bottom Ads + Shopping. Дані можна експортувати у CSV.</div>
       <div class="grid" style="margin-top:14px">
         <div>
           <label>Ключові слова (по одному в рядку)</label>
@@ -75,7 +75,7 @@ brand + competitor" spellcheck="false"></textarea>
             </div>
             <div>
               <label>Розташування (location)</label>
-              <input id="location" placeholder="Sydney, Australia" />
+              <input id="location" placeholder="Kyiv, Ukraine" />
             </div>
             <div>
               <label>Пристрій</label>
@@ -89,18 +89,12 @@ brand + competitor" spellcheck="false"></textarea>
               <input id="num" type="number" min="1" max="100" value="10" />
             </div>
             <div>
-              <label>Сторінка (page)</label>
-              <input id="page" type="number" min="1" value="1" />
+              <label>Почати з (start)</label>
+              <input id="start" type="number" min="0" step="10" value="0" />
             </div>
             <div>
-              <label>Період (time_period)</label>
-              <select id="time_period">
-                <option value="">-- any --</option>
-                <option value="d">past day</option>
-                <option value="w">past week</option>
-                <option value="m">past month</option>
-                <option value="y">past year</option>
-              </select>
+              <label>Період (tbs)</label>
+              <input id="tbs" placeholder="qdr:d (day) / w / m / y" />
             </div>
             <div>
               <label>Safe</label>
@@ -116,8 +110,8 @@ brand + competitor" spellcheck="false"></textarea>
             </div>
           </div>
           <div style="margin-top:6px" class="muted">
-            <span class="pill">search_engine = <b>google.com</b></span>
-            <span class="pill">endpoint = <code>/api/v2/search</code></span>
+            <span class="pill">engine = <b>google</b></span>
+            <span class="pill">endpoint = <code>https://serpapi.com/search</code></span>
           </div>
         </div>
       </div>
@@ -126,7 +120,7 @@ brand + competitor" spellcheck="false"></textarea>
     <div id="results" class="results"></div>
 
     <div class="footer">
-      <b>Пояснення полів Ads:</b> title, display_link, link, description, sitelinks, position. Для Shopping: title, price, merchant, link.
+      <b>Поля Ads:</b> title, displayed_link, link, description, sitelinks, advertiser, block_position. <b>Shopping:</b> title, price, merchant, link.
     </div>
   </div>
 
@@ -135,8 +129,8 @@ const $ = s => document.querySelector(s);
 const elResults = $('#results');
 const elStatus = $('#status');
 
-// Prefill API key from localStorage or default (optional demo)
-const savedKey = localStorage.getItem('zenserp_apikey_ads') || 'f7fb5890-99ed-11f0-928d-63001192fd80';
+// Prefill API key from localStorage or default demo key
+const savedKey = localStorage.getItem('serpapi_apikey_ads') || 'db653bb42b1b620fb5f2b781b36b2966791a70942d260a6b4a48408c86ae2679';
 $('#apikey').value = savedKey;
 
 function uiBusy(b){
@@ -146,15 +140,15 @@ function uiBusy(b){
 
 function paramsFromUI(q){
   const p = new URLSearchParams();
+  p.set('engine','google');
   p.set('q', q);
-  p.set('search_engine','google.com');
   const gl = $('#gl').value.trim(); if(gl) p.set('gl', gl);
   const hl = $('#hl').value.trim(); if(hl) p.set('hl', hl);
   const location = $('#location').value.trim(); if(location) p.set('location', location);
-  const device = $('#device').value; p.set('device', device);
+  const device = $('#device').value; if(device) p.set('device', device);
   const num = $('#num').value; if(num) p.set('num', num);
-  const page = $('#page').value; if(page) p.set('page', page);
-  const tp = $('#time_period').value; if(tp) p.set('time_period', tp);
+  const start = $('#start').value; if(start) p.set('start', start);
+  const tbs = $('#tbs').value.trim(); if(tbs) p.set('tbs', tbs);
   const safe = $('#safe').value; if(safe) p.set('safe', safe);
   return p;
 }
@@ -162,26 +156,24 @@ function paramsFromUI(q){
 async function fetchSerp(query){
   const apikey = $('#apikey').value.trim();
   if(!apikey){ throw new Error('Не вказано API Key'); }
-  localStorage.setItem('zenserp_apikey_ads', apikey);
+  localStorage.setItem('serpapi_apikey_ads', apikey);
   const p = paramsFromUI(query);
-  p.set('apikey', apikey);
-  const url = 'https://app.zenserp.com/api/v2/search?' + p.toString();
+  p.set('api_key', apikey);
+  const url = 'https://serpapi.com/search?' + p.toString();
   const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
   if(!res.ok){ const t = await res.text(); throw new Error('Помилка запиту: '+res.status+' '+t); }
   return res.json();
 }
 
 function getAdsBuckets(data){
-  // Zenserp may return ads in various fields for Google
-  const top = data.top_ads || data.ads_top || [];
-  const bottom = data.bottom_ads || data.ads_bottom || [];
-  const shopping = data.shopping_results || data.shopping || [];
-  // Some payloads may also have a flat 'ads'. We'll distribute by position if available
-  if((data.ads||[]).length){
-    for(const ad of data.ads){
-      const pos = (ad.position||'').toString().toLowerCase();
-      if(pos.includes('top')) top.push(ad); else if(pos.includes('bottom')) bottom.push(ad); else top.push(ad);
-    }
+  const top = Array.isArray(data.top_ads) ? [...data.top_ads] : [];
+  const bottom = Array.isArray(data.bottom_ads) ? [...data.bottom_ads] : [];
+  const shopping = Array.isArray(data.shopping_results) ? [...data.shopping_results] : [];
+  const generic = Array.isArray(data.ads) ? [...data.ads] : [];
+  // Distribute generic ads by block_position if present
+  for(const ad of generic){
+    const pos = (ad.block_position || ad.position || '').toString().toLowerCase();
+    if(pos.includes('top')) top.push(ad); else if(pos.includes('bottom')) bottom.push(ad); else top.push(ad);
   }
   return { top, bottom, shopping };
 }
@@ -189,15 +181,15 @@ function getAdsBuckets(data){
 function normalizeAd(ad){
   return {
     title: ad.title || ad.heading || '',
-    link: ad.link || ad.url || ad.tracking_url || '',
+    link: ad.link || ad.tracking_link || ad.url || '',
     display: ad.displayed_link || ad.display_link || ad.visible_link || '',
     description: ad.snippet || ad.description || '',
     sitelinks: ad.sitelinks || ad.site_links || [],
-    advertiser: ad.advertiser || ad.domain || '',
+    advertiser: ad.advertiser || ad.source || '',
   };
 }
 
-function renderAdsTable(keyword, label, items){
+function renderAdsTable(label, items){
   if(!items.length) return '';
   let rows = items.map((raw, idx)=>{
     const ad = normalizeAd(raw);
@@ -219,13 +211,13 @@ function renderAdsTable(keyword, label, items){
   </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function renderShoppingTable(keyword, items){
+function renderShoppingTable(items){
   if(!items.length) return '';
   let rows = items.map((p, idx)=>{
     const title = p.title || '';
-    const price = p.price || p.price_raw || '';
+    const price = p.price || p.price_raw || p.extracted_price || '';
     const merchant = p.merchant || p.source || '';
-    const link = p.link || p.url || '';
+    const link = p.link || p.product_link || '';
     return `<tr>
       <td>${idx+1}</td>
       <td>${escapeHtml(title)}</td>
@@ -258,9 +250,9 @@ function renderKeywordBlock(keyword, data){
     <div>Shopping: <b>${shopping.length}</b></div>`;
   det.appendChild(kpi);
 
-  det.insertAdjacentHTML('beforeend', renderAdsTable(keyword, 'Top Ads', top));
-  det.insertAdjacentHTML('beforeend', renderAdsTable(keyword, 'Bottom Ads', bottom));
-  det.insertAdjacentHTML('beforeend', renderShoppingTable(keyword, shopping));
+  det.insertAdjacentHTML('beforeend', renderAdsTable('Top Ads', top));
+  det.insertAdjacentHTML('beforeend', renderAdsTable('Bottom Ads', bottom));
+  det.insertAdjacentHTML('beforeend', renderShoppingTable(shopping));
 
   wrap.appendChild(det);
   elResults.appendChild(wrap);
@@ -297,7 +289,7 @@ function exportCSV(){
   blocks.forEach(det=>{
     const keyword = det.querySelector('summary').childNodes[0].textContent.trim();
 
-    // Top/Bottom ads
+    // For each section table that follows an h3.sectionTitle
     det.querySelectorAll('h3.sectionTitle').forEach(h3=>{
       const placement = h3.textContent.replace(/\s*\d+.*/,'').trim();
       const table = h3.nextElementSibling;
